@@ -48,3 +48,6 @@ Route::delete('/admin/screenshots/{id}', [App\Http\Controllers\Api\Admin\Screens
 Route::post('/download/{versionId}/start',    [App\Http\Controllers\Api\DownloadController::class, 'start']);
 Route::get('/download/{key}/progress',        [App\Http\Controllers\Api\DownloadController::class, 'progress']);
 Route::get('/download/{key}/file',            [App\Http\Controllers\Api\DownloadController::class, 'file']);
+
+// Rota de registro de versão (para o instalador)
+Route::post('/admin/versions/register', [App\Http\Controllers\Api\Admin\VersionAdminController::class, 'register']);

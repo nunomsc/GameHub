@@ -150,7 +150,7 @@ export default function GameDetailPage() {
                         {game.description && (
                             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                                 <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Descrição</h2>
-                                <p className="text-sm text-gray-300 leading-relaxed">{game.description}</p>
+                                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{game.description}</p>
                             </div>
                         )}
 

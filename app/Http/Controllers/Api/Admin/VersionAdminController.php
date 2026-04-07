@@ -36,7 +36,7 @@ class VersionAdminController extends Controller
         if ($request->hasFile('file') && $request->file('file')->isValid()) {
             $file     = $request->file('file');
             $ext      = $file->getClientOriginalExtension() ?: 'bin';
-            $fileName = time() . '.' . $ext;
+            $fileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
             $folder   = 'games/' . $gameId;
 
             \Storage::disk('public')->makeDirectory($folder);
@@ -75,6 +75,47 @@ class VersionAdminController extends Controller
 
         return response()->json($version);
     }
+
+    public function register(Request $request)
+    {
+        $request->validate([
+            'game_id'      => 'required|exists:games,id',
+            'version'      => 'required|string',
+            'release_notes'=> 'nullable|string',
+            'is_latest'    => 'nullable|boolean',
+            'local_path'   => 'required|string',
+        ]);
+
+        $gameId    = $request->input('game_id');
+        $localPath = $request->input('local_path');
+
+        // Verifica se o ficheiro existe
+        $fullPath = Storage::disk('public')->path($localPath);
+        if (!file_exists($fullPath)) {
+            return response()->json([
+                'message' => 'Ficheiro não encontrado em storage/app/public/' . $localPath
+            ], 422);
+        }
+
+        $fileSize = filesize($fullPath);
+
+        if ($request->boolean('is_latest')) {
+            GameVersion::where('game_id', $gameId)
+                ->update(['is_latest' => false]);
+        }
+
+        $version = GameVersion::create([
+            'game_id'       => $gameId,
+            'version'       => $request->input('version'),
+            'release_notes' => $request->input('release_notes'),
+            'is_latest'     => $request->boolean('is_latest'),
+            'file_path'     => $localPath,
+            'file_size'     => $fileSize,
+            'released_at'   => now(),
+        ]);
+
+        return response()->json($version, 201);
+    }    
 
     public function destroy(int $id)
     {

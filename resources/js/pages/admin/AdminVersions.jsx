@@ -10,24 +10,28 @@ function formatSize(bytes) {
 }
 
 export default function AdminVersions() {
-    const { id }            = useParams()
-    const [game,    setGame]    = useState(null)
+    const { id }              = useParams()
+    const [game,    setGame]  = useState(null)
     const [loading, setLoading] = useState(true)
     const [saving,  setSaving]  = useState(false)
     const [error,   setError]   = useState(null)
     const [success, setSuccess] = useState(null)
+    const [fileMode, setFileMode] = useState('upload')
 
     const [form, setForm] = useState({
         version:       '',
         release_notes: '',
         file:          null,
+        local_path:    '',
     })
 
-    useEffect(() => {
+    function loadGame() {
         adminService.getGame(id)
             .then(setGame)
             .finally(() => setLoading(false))
-    }, [id])
+    }
+
+    useEffect(() => { loadGame() }, [id])
 
     function handleChange(e) {
         const { name, value, files } = e.target
@@ -42,25 +46,30 @@ export default function AdminVersions() {
         setSuccess(null)
 
         try {
-            const data = new FormData()
-            data.append('game_id',       id)
-            data.append('version',       form.version.trim())
-            data.append('release_notes', form.release_notes)
-            data.append('is_latest',     '1')
-            if (form.file) {
-                data.append('file', form.file)
+            if (fileMode === 'upload') {
+                const data = new FormData()
+                data.append('game_id',       id)
+                data.append('version',       form.version.trim())
+                data.append('release_notes', form.release_notes)
+                data.append('is_latest',     '1')
+                if (form.file) data.append('file', form.file)
+
+                await api.post('/admin/versions', data, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                })
+            } else {
+                await api.post('/admin/versions/register', {
+                    game_id:       id,
+                    version:       form.version.trim(),
+                    release_notes: form.release_notes,
+                    is_latest:     true,
+                    local_path:    form.local_path,
+                })
             }
 
-            await api.post('/admin/versions', data, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            })
-
             setSuccess(`Versão ${form.version} adicionada com sucesso.`)
-            setForm({ version: '', release_notes: '', file: null })
-
-            // Recarrega o jogo para actualizar a lista de versões
-            const updated = await adminService.getGame(id)
-            setGame(updated)
+            setForm({ version: '', release_notes: '', file: null, local_path: '' })
+            loadGame()
 
         } catch (err) {
             const errors = err.response?.data?.errors
@@ -75,15 +84,13 @@ export default function AdminVersions() {
 
     async function handleSetLatest(versionId) {
         await api.patch(`/admin/versions/${versionId}/latest`)
-        const updated = await adminService.getGame(id)
-        setGame(updated)
+        loadGame()
     }
 
     async function handleDeleteVersion(versionId) {
         if (!confirm('Apagar esta versão?')) return
         await api.delete(`/admin/versions/${versionId}`)
-        const updated = await adminService.getGame(id)
-        setGame(updated)
+        loadGame()
     }
 
     if (loading) return <div className="p-8 text-gray-500 text-sm">A carregar...</div>
@@ -197,30 +204,71 @@ export default function AdminVersions() {
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 uppercase tracking-wide mb-1.5">
-                                Ficheiro instalador
+                                Notas da versão
                             </label>
-                            <input
-                                type="file"
-                                name="file"
-                                accept=".zip"
+                            <textarea
+                                name="release_notes"
+                                value={form.release_notes}
                                 onChange={handleChange}
-                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-400 focus:outline-none focus:border-blue-500 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-700 file:text-gray-300"
+                                rows={2}
+                                placeholder="O que mudou nesta versão..."
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
                             />
                         </div>
                     </div>
 
+                    {/* Tipo de ficheiro */}
                     <div>
-                        <label className="block text-xs text-gray-500 uppercase tracking-wide mb-1.5">
-                            Notas da versão
+                        <label className="block text-xs text-gray-500 uppercase tracking-wide mb-2">
+                            Ficheiro
                         </label>
-                        <textarea
-                            name="release_notes"
-                            value={form.release_notes}
-                            onChange={handleChange}
-                            rows={3}
-                            placeholder="O que mudou nesta versão..."
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                        />
+                        <div className="flex gap-3 mb-3">
+                            <button
+                                type="button"
+                                onClick={() => setFileMode('upload')}
+                                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors
+                                    ${fileMode === 'upload'
+                                        ? 'bg-blue-600 border-blue-500 text-white'
+                                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                                    }`}
+                            >
+                                Upload
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFileMode('path')}
+                                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors
+                                    ${fileMode === 'path'
+                                        ? 'bg-blue-600 border-blue-500 text-white'
+                                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                                    }`}
+                            >
+                                Caminho local
+                            </button>
+                        </div>
+
+                        {fileMode === 'upload' ? (
+                            <input
+                                type="file"
+                                name="file"
+                                onChange={handleChange}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-400 focus:outline-none focus:border-blue-500 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-700 file:text-gray-300"
+                            />
+                        ) : (
+                            <div>
+                                <input
+                                    type="text"
+                                    name="local_path"
+                                    value={form.local_path}
+                                    onChange={handleChange}
+                                    placeholder="ex: games/8/meu-jogo.zip"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Caminho relativo a partir de storage/app/public/
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div>
